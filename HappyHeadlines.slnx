@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Shared/HappyHeadlines.Shared.csproj" />
+  <Project Path="src/PublisherService/PublisherService.csproj" />
+  <Project Path="src/NewsletterService/NewsletterService.csproj" />
+  <Project Path="src/ArticleService/ArticleService.csproj" />
+  <Project Path="src/PrefillJob/PrefillJob.csproj" />
+  <Project Path="src/CommentService/CommentService.csproj" />
+</Solution>

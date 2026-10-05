@@ -1,0 +1,9 @@
+**/bin
+**/obj
+**/bin
+.git
+.vs
+.idea
+TestResults
+*.user
+*.suo

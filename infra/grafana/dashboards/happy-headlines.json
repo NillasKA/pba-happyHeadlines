@@ -1,0 +1,94 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true},
+      "targets": [{"expr": "sum by (layer, region) (rate(happy_headlines_cache_hits_total[5m])) / clamp_min(sum by (layer, region) (rate(happy_headlines_cache_hits_total[5m]) + rate(happy_headlines_cache_misses_total[5m])), 1e-9)", "legendFormat": "{{layer}} / {{region}}", "refId": "A"}],
+      "title": "Cache hit ratio by layer and region",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (layer, region) (rate(happy_headlines_cache_hits_total[5m]))", "legendFormat": "hits {{layer}}/{{region}}", "refId": "A"}, {"expr": "sum by (layer, region) (rate(happy_headlines_cache_misses_total[5m]))", "legendFormat": "misses {{layer}}/{{region}}", "refId": "B"}],
+      "title": "Cache hits and misses / second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, layer) (rate(happy_headlines_cache_operation_seconds_bucket[5m])))", "legendFormat": "p95 {{layer}}", "refId": "A"}],
+      "title": "Cache operation p95 latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (service, region) (rate(happy_headlines_http_requests_total[5m]))", "legendFormat": "{{service}} / {{region}}", "refId": "A"}],
+      "title": "Request / HTTP-span throughput by service and region",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 16},
+      "id": 5,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (layer, region) (rate(happy_headlines_cache_fallbacks_total[5m]))", "legendFormat": "{{layer}}/{{region}}", "refId": "A"}],
+      "title": "Database fallbacks (cache unavailable)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 22},
+      "id": 7,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (layer, region) (rate(happy_headlines_cache_bypasses_total[5m]))", "legendFormat": "{{layer}}/{{region}}", "refId": "A"}],
+      "title": "Cache bypass feature toggles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 22},
+      "id": 6,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "sum by (service, region) (rate(happy_headlines_http_requests_total{status=~\"5..\"}[5m]))", "legendFormat": "{{service}}/{{region}} 5xx", "refId": "A"}],
+      "title": "Server errors by service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.5}]}}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+      "id": 8,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi", "sort": "none"}},
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, service, region) (rate(happy_headlines_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95 {{service}}/{{region}}", "refId": "A"}],
+      "title": "HTTP response-time p95 (500 ms threshold)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["happy-headlines", "caching", "observability"],
+  "time": {"from": "now-30m", "to": "now"},
+  "title": "Happy Headlines — Cache and Service Health",
+  "uid": "happy-headlines-cache",
+  "version": 1
+}

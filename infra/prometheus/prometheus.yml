@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: publisher-service
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [publisher-service]
+        type: A
+        port: 8080
+        refresh_interval: 10s
+  - job_name: newsletter-service
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [newsletter-service]
+        type: A
+        port: 8080
+        refresh_interval: 10s
+  - job_name: article-service
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [article-service]
+        type: A
+        port: 8080
+        refresh_interval: 10s
+  - job_name: comment-service
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [comment-service]
+        type: A
+        port: 8080
+        refresh_interval: 10s

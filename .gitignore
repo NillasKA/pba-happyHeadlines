@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+artifacts/
+docs/architecture/workspace.json
+docs/architecture/.structurizr/
+.vs/
+.idea/
+*.user
+*.suo
+TestResults/
+coverage/
+.env

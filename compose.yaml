@@ -1,0 +1,248 @@
+services:
+  article-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: happy
+      POSTGRES_PASSWORD: happy
+      POSTGRES_DB: articles
+    ports:
+      - "55432:5432"
+    volumes:
+      - article_db_data:/var/lib/postgresql/data
+      - ./infra/postgres/articles.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happy -d articles"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  comment-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: happy
+      POSTGRES_PASSWORD: happy
+      POSTGRES_DB: comments
+    ports:
+      - "55433:5432"
+    volumes:
+      - comment_db_data:/var/lib/postgresql/data
+      - ./infra/postgres/comments.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happy -d comments"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  seq:
+    image: datalust/seq:2024
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:5341"
+      - "8083:80"
+    volumes:
+      - seq_data:/data
+
+  zipkin:
+    image: openzipkin/zipkin:3
+    ports:
+      - "9411:9411"
+
+  article-service:
+    build:
+      context: .
+      dockerfile: src/ArticleService/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=article-db;Port=5432;Database=articles;Username=happy;Password=happy
+      Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
+      Caching__ArticleEnabled: "true"
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Queue: article.to-store
+      Seq__ServerUrl: http://seq:5341
+      Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
+      Prefill__IntervalMinutes: 360
+      Prefill__ArticleTtlHours: 8
+    depends_on:
+      article-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      seq:
+        condition: service_started
+      zipkin:
+        condition: service_started
+    expose:
+      - "8080"
+
+  article-prefill:
+    build:
+      context: .
+      dockerfile: src/PrefillJob/Dockerfile
+    environment:
+      ConnectionStrings__Postgres: Host=article-db;Port=5432;Database=articles;Username=happy;Password=happy
+      Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
+      Seq__ServerUrl: http://seq:5341
+      Prefill__IntervalMinutes: 360
+      Prefill__ArticleTtlHours: 8
+    depends_on:
+      article-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seq:
+        condition: service_started
+
+  comment-service:
+    build:
+      context: .
+      dockerfile: src/CommentService/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=comment-db;Port=5432;Database=comments;Username=happy;Password=happy
+      Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
+      Caching__CommentEnabled: "true"
+      Seq__ServerUrl: http://seq:5341
+      Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
+    depends_on:
+      comment-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seq:
+        condition: service_started
+      zipkin:
+        condition: service_started
+    expose:
+      - "8080"
+
+  newsletter-service:
+    build:
+      context: .
+      dockerfile: src/NewsletterService/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      RabbitMq__Host: rabbitmq
+      RabbitMq__InputQueue: article.published
+      RabbitMq__OutputQueue: article.to-store
+      Seq__ServerUrl: http://seq:5341
+      Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      article-service:
+        condition: service_started
+      seq:
+        condition: service_started
+      zipkin:
+        condition: service_started
+    expose:
+      - "8080"
+
+  publisher-service:
+    build:
+      context: .
+      dockerfile: src/PublisherService/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      RabbitMq__Host: rabbitmq
+      Seq__ServerUrl: http://seq:5341
+      Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      seq:
+        condition: service_started
+      zipkin:
+        condition: service_started
+    expose:
+      - "8080"
+
+  gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - publisher-service
+      - article-service
+      - comment-service
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - publisher-service
+      - newsletter-service
+      - article-service
+      - comment-service
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: happy-headlines
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  structurizr:
+    image: structurizr/lite:2025.10.28
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./docs/architecture:/usr/local/structurizr
+
+  k6:
+    image: grafana/k6:0.54.0
+    profiles: ["loadtest"]
+    entrypoint: ["k6"]
+    command: ["run", "/scripts/happy-headlines.js"]
+    environment:
+      BASE_URL: http://gateway:8080
+    volumes:
+      - ./tests/load:/scripts:ro
+    depends_on:
+      - gateway
+
+volumes:
+  article_db_data:
+  comment_db_data:
+  seq_data:
+  prometheus_data:
+  grafana_data:
