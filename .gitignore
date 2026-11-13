@@ -12,4 +12,4 @@ coverage/
 .env
 
 node_modules/
-evidence/
+/evidence/

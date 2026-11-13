@@ -6,14 +6,14 @@ Happy Headlines is a distributed article publishing project for Development of L
 
 PublisherService places article events on RabbitMQ. NewsletterService forwards them to ArticleService for persistence and, when enabled, stores subscriber work in a durable outbox for publication to a separate queue. SubscriberService stores subscriber data and records notification processing; it does not send email. CommentService checks comment text through ProfanityService, using a circuit breaker when moderation is unavailable. ArticleService uses separate EU and NA PostgreSQL databases selected by a shared region router. The prefill worker warms Redis separately from ArticleService replicas.
 
-[Architecture views](docs/architecture/workspace.dsl) contain a C4 container diagram and an ArticleService component diagram. The [assignment requirements](docs/assignment/requirements.md), [hand-in guide](docs/assignment/hand-in.md), and [sustainability evidence](docs/assignment/sustainability.md) map the implementation to the compulsory submission and identify the evidence still needed.
+[Architecture views](docs/architecture/workspace.dsl) contain a C4 container diagram and an ArticleService component diagram. [Sustainability measurements](docs/sustainability.md) document the resource-use improvements, and [recorded evidence](docs/evidence/) contains architecture diagrams, monitoring captures, and test results.
 
 ## Project layout
 
 - `src/PublisherService/`, `src/NewsletterService/`, `src/ArticleService/`, `src/CommentService/`, `src/ProfanityService/`, and `src/SubscriberService/` contain the six application services.
 - `src/PrefillJob/` contains the scheduled worker; `src/Shared/` contains shared contracts and infrastructure.
 - `infra/` contains the gateway, databases, and monitoring configuration.
-- `docs/architecture/` contains the C4 model and architectural decisions; `docs/assignment/` contains submission guidance.
+- `docs/architecture/` contains the C4 model and architectural decisions; `docs/evidence/` contains recorded diagrams, monitoring captures, and measurements.
 - `tests/` and `scripts/` contain automated checks and build helpers.
 
 ## Build and start
@@ -58,6 +58,6 @@ The subscriber feature defaults to disabled. `GET /features/subscribers` reads i
 
 ## Monitoring and shutdown
 
-Grafana displays service and cache metrics; Seq stores structured logs; Zipkin displays traces across the publication path. The [hand-in guide](docs/assignment/hand-in.md) describes the screenshots required by the assignment.
+Grafana displays service and cache metrics; Seq stores structured logs; Zipkin displays traces across the publication path. [Recorded evidence](docs/evidence/) includes metrics, structured logs, and a distributed publication trace.
 
 `docker compose down` stops the stack and retains volumes. `docker compose down -v` also removes local persisted data, including database and monitoring volumes.
