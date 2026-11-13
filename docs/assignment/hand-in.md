@@ -1,16 +1,16 @@
 # Compulsory assignment 2: hand-in pack
 
-The [official assignment](https://moodle.easv.dk/mod/assign/view.php?id=397622) displays the deadline **Monday, 16 November 2026, 8:00 AM**. The course evaluation precedes assignment access. The material below identifies the code and proposed explanations for each field. Screenshots, full-stack evidence, video and Moodle submission remain pending until verified.
+The [official assignment](https://moodle.easv.dk/mod/assign/view.php?id=397622) displays the deadline **Monday, 16 November 2026, 8:00 AM**. The course evaluation precedes assignment access. The material below identifies the code and proposed explanations for each field. The evidence was captured from a successful [verification run](https://github.com/NillasKA/pba-happyHeadlines/actions/runs/43422690611) for revision `7a0fc14b0bfaafaffa815c7f9a3125bae595c744`. The remaining steps are the Moodle fields and image uploads, the recording, and the final submission.
 
 ## GitHub repository
 
 Repository: <https://github.com/NillasKA/pba-happyHeadlines>
 
-The repository is public. The assignment revision must be present on the branch linked in the field; the pull request branch remains the relevant revision until merged.
+The repository is public. The verified source revision is recorded in the [capture manifest](screenshots/manifest.json).
 
 ## C4 diagrams
 
-The two required screenshots are `c4-containers.png` (level 2) and `c4-article-components.png` (ArticleService level 3), if captured successfully by the verification workflow. The [Structurizr model](../architecture/workspace.dsl) provides the `containers` and `article-components` views at <http://localhost:8081/workspace/diagrams>. Generated images require a legibility and accuracy check before submission.
+The two required screenshots are [c4-containers.png](screenshots/c4-containers.png) (level 2) and [c4-article-components.png](screenshots/c4-article-components.png) (ArticleService level 3). The [Structurizr model](../architecture/workspace.dsl) provides the `containers` and `article-components` views at <http://localhost:8081/workspace/diagrams>. The captured diagrams were visually reviewed.
 
 ## Scale cube: Z-axis coordination code
 
@@ -26,7 +26,7 @@ The [`article-service` and `gateway` definitions](../../compose.yaml) and [`infr
 
 Field explanation:
 
-> NGINX accepts requests at the gateway and forwards article requests to the ArticleService upstream. Docker DNS supplies the addresses for the service replicas, and NGINX resolves those addresses dynamically. The upstream uses the default round-robin selection across the resolved instances. Each ArticleService response includes an `X-Article-Instance` header that can identify the selected replica. The distribution claim requires verification against the actual running instances.
+> NGINX accepts requests at the gateway and forwards article requests to the ArticleService upstream. Docker DNS supplies the addresses for the service replicas, and NGINX resolves those addresses dynamically. The upstream uses the default round-robin selection across the resolved instances. Each ArticleService response includes an `X-Article-Instance` header that can identify the selected replica. The [integration smoke test](../../scripts/smoke-test.sh) checks the serving-instance headers for two distinct instances; its [run log](screenshots/smoke.log) reports a pass.
 
 ## Fault isolation: circuit breaker and swimlanes
 
@@ -38,15 +38,15 @@ Field explanation:
 
 ## Monitoring gallery
 
-The planned verification artifact contains the following files when capture succeeds. Each image needs visual inspection, and the descriptions must reflect the contents actually shown.
+The following screenshots were captured from the verified run and visually reviewed.
 
 | File | Intended description |
 |---|---|
-| `metrics-prometheus.png` | Prometheus query showing Happy Headlines HTTP request counts by service. The visible service labels and values identify the measured activity. |
-| `logging-seq.png` | Seq structured events from article publication or persistence, identifying the emitting service and the operation recorded. |
-| `tracing-zipkin.png` | Zipkin distributed trace showing spans from multiple services in an article publication path. The visible span names and services identify the components involved. |
+| [metrics-prometheus.png](screenshots/metrics-prometheus.png) | Prometheus query showing Happy Headlines HTTP request counts by service. The visible service labels and values identify the measured activity. |
+| [logging-seq.png](screenshots/logging-seq.png) | Seq structured events from article publication or persistence, identifying the emitting service and the operation recorded. |
+| [tracing-zipkin.png](screenshots/tracing-zipkin.png) | Zipkin distributed trace showing spans from multiple services in an article publication path. The visible span names and services identify the components involved. |
 
-The workflow uploads available files in the `verification-evidence` artifact. If capture is missing, the corresponding screenshot must be obtained from the running dashboard, Seq or Zipkin; a configured endpoint alone is not evidence of observed telemetry.
+The [verification run](https://github.com/NillasKA/pba-happyHeadlines/actions/runs/43422690611) also retains its `verification-evidence` artifact.
 
 ## DevOps: CI and CD code fields
 
@@ -65,19 +65,19 @@ if (await feature.IsEnabledAsync(cancellationToken))
 else HappyMetrics.SubscriberEvents.WithLabels("disabled").Inc();
 ```
 
-[`SubscriberFeature.cs`](../../src/Shared/Services/SubscriberFeature.cs) stores the shared flag in Redis. Disabled or unavailable state blocks subscriber API operations with 503, skips new subscriber work and pauses pending queue processing. Work already in flight can finish; skipped events are not backfilled. The outbox retries publication, and SubscriberService deduplicates notification records. Both enabled and disabled paths require runtime verification.
+[`SubscriberFeature.cs`](../../src/Shared/Services/SubscriberFeature.cs) stores the shared flag in Redis. Disabled or unavailable state blocks subscriber API operations with 503, skips new subscriber work and pauses pending queue processing. Work already in flight can finish; skipped events are not backfilled. The outbox retries publication, and SubscriberService deduplicates notification records. The enabled and disabled paths were exercised in the [resilience smoke test](screenshots/resilience.log).
 
 ## Sustainability gallery
 
-The [sustainability evidence](sustainability.md) contains baseline/current code and the three tactics. Expected files from a successful capture and descriptions are:
+The [sustainability evidence](sustainability.md) contains baseline/current code and the three tactics. The screenshots and descriptions are:
 
 | File | Tactic and explanation |
 |---|---|
-| `gaf-pagination.png` | **Defer Fetching/Lazy Fetch:** the article list supports a limit and offset, allowing a client to request a smaller page instead of the complete recent list. The image should show the observed counts and bytes for the same dataset. |
-| `gaf-compression.png` | **Reduce Network Package Size:** ArticleService negotiates response compression. The image should show the encoding and transferred size for the same response with and without compression. Compression uses CPU and does not itself establish an energy saving. |
-| `gaf-image.png` | **Reduce Bundle Size:** service images use a chiseled runtime base rather than the previous full runtime base. The image should show the observed sizes for both base images on the tested platform. Image size alone does not establish runtime energy savings. |
+| [gaf-pagination.png](screenshots/gaf-pagination.png) | **Defer Fetching/Lazy Fetch:** the article list supports a limit and offset, allowing a client to request a smaller page instead of the complete recent list. The measured full response contained six articles and 5,600 bytes; one article occupied 1,681 bytes. |
+| [gaf-compression.png](screenshots/gaf-compression.png) | **Reduce Network Package Size:** ArticleService negotiates response compression. The measured gzip response was 627 bytes compared with 5,600 bytes without compression. Compression uses CPU and does not itself establish an energy saving. |
+| [gaf-image.png](screenshots/gaf-image.png) | **Reduce Bundle Size:** service images use a chiseled runtime base rather than the previous full runtime base. On the Linux x64 runner the full and chiseled base images measured 97,675,516 and 72,585,216 bytes respectively. Image size alone does not establish runtime energy savings. |
 
-The image descriptions require the actual recorded values and the revision, platform and dataset used. No savings are claimed without those observations.
+The [measurement log](screenshots/gaf-measurements.log) records the values; the [manifest](screenshots/manifest.json) records the tested revision and platform. These are local observations, not measured energy or carbon savings.
 
 ## Recording and submission
 

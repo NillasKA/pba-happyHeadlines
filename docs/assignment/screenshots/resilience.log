@@ -1,0 +1,15 @@
+Testing queued delivery across subscriber outage and feature disablement
+ Container pba-happyheadlines-subscriber-service-1 Stopping 
+ Container pba-happyheadlines-subscriber-service-1 Stopped 
+ Container pba-happyheadlines-subscriber-db-1 Waiting 
+ Container pba-happyheadlines-rabbitmq-1 Waiting 
+ Container pba-happyheadlines-subscriber-db-1 Healthy 
+ Container pba-happyheadlines-rabbitmq-1 Healthy 
+ Container pba-happyheadlines-subscriber-service-1 Starting 
+ Container pba-happyheadlines-subscriber-service-1 Started 
+Testing moderation outage and circuit recovery
+ Container pba-happyheadlines-profanity-service-1 Stopping 
+ Container pba-happyheadlines-profanity-service-1 Stopped 
+ Container pba-happyheadlines-profanity-service-1 Starting 
+ Container pba-happyheadlines-profanity-service-1 Started 
+PASS: feature gating, durable notification delivery, moderation failure isolation and recovery

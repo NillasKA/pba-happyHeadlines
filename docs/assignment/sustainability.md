@@ -1,6 +1,6 @@
 # Sustainability evidence
 
-The [Green Architecture Framework](https://baerbak.cs.au.dk/papers/gaf.html) identifies tactics for reducing resource use, while emphasizing measurement and trade-offs. The [week 45 project requirement](https://moodle.easv.dk/mod/page/view.php?id=396024) asks for three tactics not previously worked on and before/after code. The following three tactics were absent from the baseline implementation and are introduced in this revision. Their measured effects remain unverified. No energy or carbon reduction has been measured.
+The [Green Architecture Framework](https://baerbak.cs.au.dk/papers/gaf.html) identifies tactics for reducing resource use, while emphasizing measurement and trade-offs. The [week 45 project requirement](https://moodle.easv.dk/mod/page/view.php?id=396024) asks for three tactics not previously worked on and before/after code. The following three tactics were absent from the baseline implementation and are introduced in this revision. The effects below were measured in [verification run 43422690611](https://github.com/NillasKA/pba-happyHeadlines/actions/runs/43422690611) on Linux x64. No energy or carbon reduction was measured.
 
 ## Defer Fetching/Lazy Fetch: paginated article lists
 
@@ -18,7 +18,7 @@ After:
 return Ok(await articleService.GetRecentAsync(region, cancellationToken, limit, offset));
 ```
 
-A screenshot can compare the complete list with `GET /articles?region=eu&limit=1&offset=0` using the same populated dataset, with observed record counts and response bytes. The list must have more than one article for this comparison to demonstrate a difference.
+The [comparison](screenshots/gaf-pagination.png) returned six articles and 5,600 bytes without a limit, versus one article and 1,681 bytes with `limit=1` on the same dataset.
 
 ## Reduce Network Package Size: negotiated response compression
 
@@ -30,7 +30,7 @@ builder.Services.AddResponseCompression();
 app.UseResponseCompression();
 ```
 
-A comparison of the same sufficiently large JSON response with and without `Accept-Encoding: gzip` can record the response encoding and transferred bytes. Compression consumes CPU and its effect depends on the response; smaller transferred size does not alone establish lower energy consumption.
+The [comparison](screenshots/gaf-compression.png) transferred 627 bytes with gzip versus 5,600 bytes for the same uncompressed response. Compression consumes CPU and its effect depends on the response; smaller transferred size does not alone establish lower energy consumption.
 
 ## Reduce Bundle Size: smaller runtime base image
 
@@ -46,8 +46,8 @@ The current runtime image begins with:
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
 ```
 
-The same runtime-image choice is used across application Dockerfiles. Pulled base-image sizes and the resulting application images require measurement and testing before a size improvement can be claimed; size alone does not prove a reduction in runtime energy. Image sizes vary by platform and image revision.
+The same runtime-image choice is used across application Dockerfiles. The [comparison](screenshots/gaf-image.png) measured 97,675,516 bytes for the full base image and 72,585,216 bytes for the chiseled base image on Linux x64. Image sizes vary by platform and revision; size alone does not prove a reduction in runtime energy.
 
 ## Measurement status
 
-`scripts/measure-gaf.sh` provides local response and base-image comparisons. It requires a running stack, a populated EU dataset and both base images available. Three legible images can show the command output or corresponding browser/network views. Each screenshot requires the tested revision, platform, dataset, request and result. No figures or screenshots have been recorded in this document.
+The [measurement log](screenshots/gaf-measurements.log) records the comparisons made by `scripts/measure-gaf.sh`; the [manifest](screenshots/manifest.json) records revision `7a0fc14b0bfaafaffa815c7f9a3125bae595c744`, Linux x64 and capture time 2026-11-13 12:11:27 UTC. The dataset consisted of synthetic articles in the local Compose stack.

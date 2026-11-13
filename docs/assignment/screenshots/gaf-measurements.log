@@ -1,0 +1,7 @@
+Unbounded: 6 articles, 5600 bytes
+Limit 1: 1 articles, 1681 bytes
+Gzip response: 627 bytes
+Content-Encoding: Content-Encoding: gzip
+Runtime image sizes (bytes):
+[mcr.microsoft.com/dotnet/aspnet:10.0] 97675516
+[mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra] 72585216
