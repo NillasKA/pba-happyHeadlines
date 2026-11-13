@@ -8,7 +8,7 @@ workspace "Happy Headlines" "Course project architecture" {
       newsletterService = container "NewsletterService" "Forwards articles and stores enabled subscriber work for outbox delivery." "ASP.NET Core"
       articleService = container "ArticleService" "Serves and persists articles." "ASP.NET Core" {
         articleApi = component "ArticlesController" "Handles article read requests." "ASP.NET Core MVC"
-        consumer = component "ArticlePersistenceConsumer" "Consumes article storage messages." "RabbitMQ.Client"
+        consumer = component "Article persistence consumer" "Consumes article storage messages." "RabbitMQ.Client"
         articleLogic = component "ArticleService" "Coordinates article reads, cache and persistence." ".NET"
         repository = component "ArticleRepository" "Reads and writes regional articles." "Npgsql"
         shardRouter = component "ArticleShardRouter" "Selects a regional database connection." "Npgsql"
@@ -90,6 +90,11 @@ workspace "Happy Headlines" "Course project architecture" {
       autolayout lr
     }
     container system "containers" {
+      include *
+      exclude prometheus grafana seq zipkin
+      autolayout lr
+    }
+    container system "monitoring" {
       include *
       autolayout lr
     }

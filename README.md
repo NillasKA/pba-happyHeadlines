@@ -21,7 +21,7 @@ PublisherService places article events on RabbitMQ. NewsletterService forwards t
 Prerequisites are the .NET 10 SDK, Docker Engine, Docker Compose v2, Bash, curl and Python 3. From the repository root:
 
 ```bash
-./scripts/build.sh
+bash scripts/build.sh
 docker compose up --build -d --wait --scale article-service=2
 docker compose ps
 ```
@@ -31,7 +31,7 @@ The build script publishes all six services and the prefill worker to `artifacts
 ```bash
 dotnet build HappyHeadlines.slnx
 dotnet test HappyHeadlines.slnx
-./scripts/smoke-test.sh
+bash scripts/smoke-test.sh
 ```
 
 The smoke test requires the running stack with at least two ArticleService replicas. A local scale-out demonstration uses `docker compose up --build -d --wait --scale article-service=2`. The optional load test uses `docker compose --profile loadtest run --rm --no-deps k6`. Local results do not establish production capacity.

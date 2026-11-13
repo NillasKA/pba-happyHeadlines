@@ -1,48 +1,86 @@
-# Hand-in guide
+# Compulsory assignment 2: hand-in pack
 
-The fields follow the [official assignment](https://moodle.easv.dk/mod/assign/view.php?id=397622). The displayed deadline is Monday, 16 November 2026, 8:00 AM. The course evaluation precedes access to the assignment. Evidence is to represent the actual running project and repository revision.
+The [official assignment](https://moodle.easv.dk/mod/assign/view.php?id=397622) displays the deadline **Monday, 16 November 2026, 8:00 AM**. The course evaluation precedes assignment access. The material below identifies the code and proposed explanations for each field. Screenshots, full-stack evidence, video and Moodle submission remain pending until verified.
 
-## Repository
+## GitHub repository
 
-The field requires the public repository URL. Public visibility requires confirmation without account access.
+Repository: <https://github.com/NillasKA/pba-happyHeadlines>
+
+The repository is public. The assignment revision must be present on the branch linked in the field; the pull request branch remains the relevant revision until merged.
 
 ## C4 diagrams
 
-The `containers` view in Structurizr at <http://localhost:8081> supplies the level 2 diagram; `article-components` supplies ArticleService level 3. Both views require legible screenshots and verification against the running revision.
+The two required screenshots are `c4-containers.png` (level 2) and `c4-article-components.png` (ArticleService level 3), if captured successfully by the verification workflow. The [Structurizr model](../architecture/workspace.dsl) provides the `containers` and `article-components` views at <http://localhost:8081/workspace/diagrams>. Generated images require a legibility and accuracy check before submission.
 
-## Scale cube
+## Scale cube: Z-axis coordination code
 
-- **Z-axis coordinator:** `src/Shared/Configuration/ArticleShardRouter.cs` and the connection strings in `compose.yaml` provide the coordinator and its configuration. The router normalizes the region and selects the EU or NA connection pool. `ArticleRepository` uses it for reads and writes; the separate prefill repository uses it for both regions.
-- **X-axis:** `compose.yaml` and `infra/nginx/default.conf` contain the ArticleService and gateway configuration. The scaling command is `docker compose up -d --scale article-service=2`. NGINX resolves the Compose service name dynamically and uses its default round-robin selection across resolved instances. The `X-Article-Instance` response header identifies the serving instance. Evidence of routing to both replicas requires runtime observation.
+The coordinator code is [`ArticleShardRouter.cs`](../../src/Shared/Configuration/ArticleShardRouter.cs). The relevant EU/NA connection configuration is in [`compose.yaml`](../../compose.yaml), and the repository uses the router for both reads and writes in [`ArticleRepository.cs`](../../src/ArticleService/Infrastructure/ArticleRepository.cs).
 
-## Fault isolation
+Field explanation:
 
-`src/CommentService/Services/ProfanityClient.cs` contains the circuit breaker; registration is in `src/CommentService/Program.cs`. The breaker opens after three failed checks, waits 15 seconds, and allows one recovery probe. Calls time out after two seconds. Unavailable moderation produces a 503 rather than accepting an unchecked comment; rejected content produces a 400. This separates the moderation dependency from other paths and bounds failed moderation calls. The breaker is in-process per CommentService instance. Observed test results require separate verification.
+> ArticleShardRouter normalizes the region and selects the EU or NA PostgreSQL connection pool. ArticleService uses the same selection for reads and writes; the independent prefill worker reads both regional databases. The databases are separate containers in the local deployment, rather than geographically distributed regions.
 
-## Monitoring
+## Scale cube: X-axis code and load-balancer explanation
 
-After an article publication and read, the monitoring gallery requires:
+The [`article-service` and `gateway` definitions](../../compose.yaml) and [`infra/nginx/default.conf`](../../infra/nginx/default.conf) provide the configuration. Scaling is expressed as `docker compose up -d --scale article-service=2`.
 
-1. A Grafana or Prometheus screenshot identifying the service, metric and time interval.
-2. A Seq screenshot identifying the service and relevant structured log event.
-3. A Zipkin screenshot identifying participating services and messaging spans in a distributed trace.
+Field explanation:
 
-Each image requires a description. Empty dashboards or configured endpoints alone do not demonstrate observed telemetry. The verification workflow attempts to capture live screenshots under `artifacts/evidence/` and uploads available evidence. The captured images require review for legibility and relevance; if capture fails, the monitoring tools and Structurizr provide the manual fallback.
+> NGINX accepts requests at the gateway and forwards article requests to the ArticleService upstream. Docker DNS supplies the addresses for the service replicas, and NGINX resolves those addresses dynamically. The upstream uses the default round-robin selection across the resolved instances. Each ArticleService response includes an `X-Article-Instance` header that can identify the selected replica. The distribution claim requires verification against the actual running instances.
 
-## DevOps
+## Fault isolation: circuit breaker and swimlanes
 
-The `verify` job in `.github/workflows/delivery.yml` supplies the CI field; `publish` supplies the CD field. CI restores, builds, tests, builds the Compose stack and runs the smoke test. On a pushed `v*` tag, a successful verify job permits seven tagged images to be published to GHCR. A separate manually triggered `.github/workflows/promote.yml` deploys a selected image tag to a configured host. A successful build is distinct from successful registry publication or remote deployment.
+The complete circuit breaker is [`ProfanityClient.cs`](../../src/CommentService/Services/ProfanityClient.cs); registration is in [`CommentService/Program.cs`](../../src/CommentService/Program.cs). The controller maps moderation unavailability to HTTP 503 and rejected text to 400.
 
-## Feature toggle
+Field explanation:
 
-`src/NewsletterService/Services/NewsletterService.cs` contains the toggle decision; `src/Shared/Services/SubscriberFeature.cs` contains shared Redis state. When enabled, subscriber work is saved in the NewsletterService outbox and dispatched to the separate queue. When disabled or unavailable, subscriber endpoints return 503, new subscriber work is skipped and queued processing pauses. The state is persistent in the local Redis volume, although in-flight operations can finish and skipped events are not backfilled. Both paths require runtime verification.
+> CommentService calls the separate ProfanityService through a circuit breaker. After three failures, the breaker opens for 15 seconds and rejects further moderation calls; one half-open probe then tests recovery. A two-second timeout bounds each attempted call. If moderation is unavailable, a comment write fails closed with 503 rather than saving unchecked text. The moderation dependency is isolated from unrelated article operations, illustrating separate swimlanes and limiting failure propagation. The breaker state is local to each CommentService instance.
 
-## Sustainability
+## Monitoring gallery
 
-The [sustainability evidence](sustainability.md) describes three tactics and their before/after code. The gallery requires at least three pictures; each description names the tactic, shows the actual improvement and explains its effect. Numerical savings require measurements.
+The planned verification artifact contains the following files when capture succeeds. Each image needs visual inspection, and the descriptions must reflect the contents actually shown.
 
-## Recording and final submission
+| File | Intended description |
+|---|---|
+| `metrics-grafana.png` | Grafana dashboard displaying Happy Headlines service or cache metrics from Prometheus. The displayed series, service and time interval identify the measured activity. |
+| `logging-seq.png` | Seq structured events from article publication or persistence, identifying the emitting service and the operation recorded. |
+| `tracing-zipkin.png` | Zipkin distributed trace showing spans from multiple services in an article publication path. The visible span names and services identify the components involved. |
 
-A possible five-minute tour allocates about 45 seconds to architecture, 75 seconds to scaling and fault isolation, 60 seconds to observability, 60 seconds to delivery and the feature toggle, and the remaining minute to selected sustainability changes. A shorter selection is appropriate if necessary. The recording requires course vocabulary and actual evidence; the official limit is five minutes.
+The workflow uploads available files in the `verification-evidence` artifact. If capture is missing, the corresponding screenshot must be obtained from the running dashboard, Seq or Zipkin; a configured endpoint alone is not evidence of observed telemetry.
 
-Completion requires the assignment fields, screenshots and recording, followed by **Add submission** and the short message described in the lecture. The resulting submission status requires confirmation in Moodle.
+## DevOps: CI and CD code fields
+
+The CI field uses the complete `verify` job and its workflow context in [`.github/workflows/delivery.yml`](../../.github/workflows/delivery.yml). It restores, builds, tests, starts two ArticleService replicas, runs the integration smoke test and attempts evidence capture.
+
+The CD field uses the `publish` job and its workflow context from the same file, together with [`.github/workflows/promote.yml`](../../.github/workflows/promote.yml). A successful verification permits `v*` tags to publish seven versioned images to GHCR. The separate manually triggered promotion deploys a selected release to a configured host. Publication and deployment require separate confirmation; workflow definitions do not establish that either occurred.
+
+## NewsletterService feature-toggle code
+
+The required NewsletterService decision is in [`NewsletterService.cs`](../../src/NewsletterService/Services/NewsletterService.cs):
+
+```csharp
+await articleStorePublisher.PublishAsync(article, cancellationToken);
+if (await feature.IsEnabledAsync(cancellationToken))
+    await outbox.EnqueueAsync(article, cancellationToken);
+else HappyMetrics.SubscriberEvents.WithLabels("disabled").Inc();
+```
+
+[`SubscriberFeature.cs`](../../src/Shared/Services/SubscriberFeature.cs) stores the shared flag in Redis. Disabled or unavailable state blocks subscriber API operations with 503, skips new subscriber work and pauses pending queue processing. Work already in flight can finish; skipped events are not backfilled. The outbox retries publication, and SubscriberService deduplicates notification records. Both enabled and disabled paths require runtime verification.
+
+## Sustainability gallery
+
+The [sustainability evidence](sustainability.md) contains baseline/current code and the three tactics. Expected files from a successful capture and descriptions are:
+
+| File | Tactic and explanation |
+|---|---|
+| `gaf-pagination.png` | **Defer Fetching/Lazy Fetch:** the article list supports a limit and offset, allowing a client to request a smaller page instead of the complete recent list. The image should show the observed counts and bytes for the same dataset. |
+| `gaf-compression.png` | **Reduce Network Package Size:** ArticleService negotiates response compression. The image should show the encoding and transferred size for the same response with and without compression. Compression uses CPU and does not itself establish an energy saving. |
+| `gaf-image.png` | **Reduce Bundle Size:** service images use a chiseled runtime base rather than the previous full runtime base. The image should show the observed sizes for both base images on the tested platform. Image size alone does not establish runtime energy savings. |
+
+The image descriptions require the actual recorded values and the revision, platform and dataset used. No savings are claimed without those observations.
+
+## Recording and submission
+
+A five-minute outline can allocate 45 seconds to the C4 views, 75 seconds to scale and fault isolation, 60 seconds to monitoring, 60 seconds to CI/CD and the feature toggle, and the remaining minute to selected sustainability evidence. The explanation should use course terminology and the actual submitted artifacts; fewer areas may be selected if necessary. The official maximum is five minutes.
+
+The remaining personal steps are completion of the assignment fields, review and upload of the screenshots, recording and upload of the video, **Add submission** with the short message described in the lecture, and confirmation of the resulting Moodle submission status.
