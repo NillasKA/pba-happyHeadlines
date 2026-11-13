@@ -9,10 +9,11 @@ namespace HappyHeadlines.ArticleService.Controllers;
 public sealed class ArticlesController(IArticleService articleService) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ArticleRecord>>> GetRecent(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<ArticleRecord>>> GetRecent([FromQuery] int? limit, [FromQuery] int offset = 0, CancellationToken cancellationToken = default)
     {
         var region = Request.Headers["X-Region"].FirstOrDefault() ?? Request.Query["region"].FirstOrDefault();
-        return Ok(await articleService.GetRecentAsync(region, cancellationToken));
+        if (limit is < 1 or > 100 || offset < 0) return BadRequest("limit must be 1-100 and offset must be non-negative");
+        return Ok(await articleService.GetRecentAsync(region, cancellationToken, limit, offset));
     }
 
     [HttpGet("{id:guid}")]

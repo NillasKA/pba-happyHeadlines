@@ -1,204 +1,63 @@
 # Happy Headlines
 
-Happy Headlines is a Development of Large Systems course project. It demonstrates containerized services, C4 architecture, the AKF Scale Cube, asynchronous messaging, fault isolation, observability, distributed tracing, and caching.
+Happy Headlines is a distributed article publishing project for Development of Large Systems. It demonstrates service boundaries, asynchronous messaging, regional database sharding, horizontal scaling, fault isolation, observability, caching, feature toggles, and delivery automation.
 
-The project emphasizes how the system is structured and operated rather than building a feature-rich news product.
+## Architecture
 
-## Architecture at a glance
+PublisherService places article events on RabbitMQ. NewsletterService forwards them to ArticleService for persistence and, when enabled, stores subscriber work in a durable outbox for publication to a separate queue. SubscriberService stores subscriber data and records notification processing; it does not send email. CommentService checks comment text through ProfanityService, using a circuit breaker when moderation is unavailable. ArticleService uses separate EU and NA PostgreSQL databases selected by a shared region router. The prefill worker warms Redis separately from ArticleService replicas.
 
-```mermaid
-flowchart LR
-    Publisher[Publisher] --> Gateway[NGINX API Gateway]
-    Reader[Reader] --> Gateway
-    Gateway --> PublisherService[PublisherService]
-    PublisherService -->|ArticlePublished + trace context| Queue1[(RabbitMQ: article.published)]
-    Queue1 --> Newsletter[NewsletterService]
-    Newsletter -->|ArticleToStore + trace context| Queue2[(RabbitMQ: article.to-store)]
-    Queue2 --> Article[ArticleService]
-    Article --> ArticleDB[(Article PostgreSQL)]
-    Prefill[Article Prefill Job] --> ArticleDB
-    Prefill --> Redis[(Shared Redis)]
-    Article --> Redis
-    Gateway --> Comments[CommentService]
-    Comments --> CommentDB[(Comment PostgreSQL)]
-    Comments --> Redis
-    Prometheus --> PublisherService
-    Prometheus --> Newsletter
-    Prometheus --> Article
-    Prometheus --> Comments
-    Grafana --> Prometheus
-    PublisherService --> Seq[Seq logs]
-    Newsletter --> Seq
-    Article --> Seq
-    Comments --> Seq
-    PublisherService -. traces .-> Zipkin[Zipkin]
-    Newsletter -. traces .-> Zipkin
-    Article -. traces .-> Zipkin
-    Comments -. traces .-> Zipkin
-```
+[Architecture views](docs/architecture/workspace.dsl) contain a C4 container diagram and an ArticleService component diagram. The [assignment requirements](docs/assignment/requirements.md), [hand-in guide](docs/assignment/hand-in.md), and [sustainability evidence](docs/assignment/sustainability.md) map the implementation to the compulsory submission and identify the evidence still needed.
 
-ArticleService and CommentService own separate PostgreSQL containers. Each database partitions its rows by `eu` and `na`; the gateway passes `X-Region` through to the owning service. Redis is one shared local instance with region-qualified keys. This demonstrates a logical regional Z-axis split locally, not physically regional caches, production multi-region hosting, or disaster recovery.
+## Project layout
 
-### Project layout
-
-- `src/PublisherService/` — `Controllers/`, `Services/`, and RabbitMQ `Infrastructure/`.
-- `src/NewsletterService/` — `Services/`, queue `Workers/`, RabbitMQ `Infrastructure/`, and `Configuration/`; no business HTTP controller.
-- `src/ArticleService/` — `Controllers/`, `Services/`, PostgreSQL/Redis `Infrastructure/`, and the RabbitMQ `Workers/` consumer.
-- `src/CommentService/` — `Controllers/`, `Services/`, and PostgreSQL/Redis `Infrastructure/`.
-- `src/PrefillJob/` — scheduled `Workers/`, prefill `Services/`, and database/cache `Infrastructure/`; no HTTP controller.
-- `src/Shared/` — shared contracts, configuration, logging, metrics, tracing, and locking helpers.
-- `infra/` — PostgreSQL initialization, NGINX gateway, Prometheus configuration, and provisioned Grafana dashboard.
-- `docs/architecture/` — Structurizr C4 model, workflow, design decisions, and course principle notes.
-- `docs/presentations/week40-cache-presentation.md` — presentation walkthrough and speaker notes.
-
-Each `Program.cs` is the composition root: it configures the host, registers dependencies, adds middleware, maps controllers where present, and starts the application. Health and metrics remain infrastructure endpoints.
-
-## Requirements
-
-- .NET 10 SDK
-- Docker Engine and Docker Compose v2
-- `curl`, `python3`, and Bash for the smoke test
-- k6 is optional; it runs in its own Compose profile, so it does not need to be installed on the host
+- `src/PublisherService/`, `src/NewsletterService/`, `src/ArticleService/`, `src/CommentService/`, `src/ProfanityService/`, and `src/SubscriberService/` contain the six application services.
+- `src/PrefillJob/` contains the scheduled worker; `src/Shared/` contains shared contracts and infrastructure.
+- `infra/` contains the gateway, databases, and monitoring configuration.
+- `docs/architecture/` contains the C4 model and architectural decisions; `docs/assignment/` contains submission guidance.
+- `tests/` and `scripts/` contain automated checks and build helpers.
 
 ## Build and start
 
-Run these commands from the project root. The .NET 10 SDK publishes the application artifacts first; Compose builds runtime images from them:
-
-```bash
-./scripts/build.sh
-docker compose up --build -d --wait
-```
-
-The build script publishes the five .NET applications into `artifacts/`. Docker then copies those publish outputs into lean .NET runtime images. Run the build script again after changing application code before rebuilding the Compose images.
-
-Check that the services are running:
-
-```bash
-docker compose ps
-```
-
-## Local URLs and ports
-
-| Service | URL / host port | Purpose |
-|---|---|---|
-| API gateway | <http://localhost:8080> | Application API entry point |
-| Structurizr Lite | <http://localhost:8081> | Render C4 views from `docs/architecture/workspace.dsl` |
-| Grafana | <http://localhost:3000> | Dashboard; `admin` / `happy-headlines` |
-| Prometheus | <http://localhost:9090> | Metrics and PromQL |
-| Seq | <http://localhost:8083> | Structured logs; ingestion port 5341 |
-| Zipkin | <http://localhost:9411> | Distributed traces |
-| RabbitMQ management | <http://localhost:15672> | Queue inspection; `guest` / `guest` |
-| RabbitMQ AMQP | `localhost:5672` | Application messaging |
-| Redis | `localhost:6379` | Shared cache |
-| Article PostgreSQL | `localhost:55432` | Article data; `happy` / `happy` |
-| Comment PostgreSQL | `localhost:55433` | Comment data; `happy` / `happy` |
-
-The ASP.NET services are exposed to the Compose network and accessed from the host through the gateway. The additional database/cache/broker ports are for local development and inspection.
-
-## Try the API
-
-Publish an article. The `202 Accepted` response means the request was queued; the article is stored asynchronously by ArticleService.
-
-```bash
-response="$(curl -fsS -X POST http://localhost:8080/publish \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Example headline","body":"An example article body.","region":"eu"}')"
-printf '%s\n' "$response"
-article_id="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$response")"
-```
-
-PublisherService returns `202 Accepted` with the article ID because processing continues asynchronously. The following bounded loop waits for the queue consumers to persist it, then both reads use the same region. Run these snippets in the same terminal so `$article_id` remains set:
-
-```bash
-for _ in $(seq 1 30); do
-  if curl -fsS "http://localhost:8080/articles/$article_id" -H 'X-Region: eu' >/dev/null; then break; fi
-  sleep 1
-done
-curl -i "http://localhost:8080/articles/$article_id" -H 'X-Region: eu'
-curl -i 'http://localhost:8080/articles?region=eu'
-```
-
-Add and read comments:
-
-```bash
-curl -i -X POST "http://localhost:8080/articles/$article_id/comments" \
-  -H 'X-Region: eu' -H 'Content-Type: application/json' \
-  -d '{"body":"A reader comment."}'
-
-curl -i "http://localhost:8080/articles/$article_id/comments" -H 'X-Region: eu'
-```
-
-The `X-Region` header selects the logical regional partition. The implementation accepts `eu` and `na`; unknown values default to `na`.
-
-## Week 40 cache demonstration
-
-- **Articles:** the single Article Prefill Job loads articles published in the last 14 days every 6 hours, with an 8-hour Redis TTL. Article reads use cache-aside on a miss.
-- **Comments:** reads use cache-aside, comment writes invalidate that article’s comment list, and Redis maintains the 30 most recently used article IDs per region. The 30-item bound is exact; Redis `allkeys-lru` also limits memory but is not used as the exact-count mechanism.
-- **Cache failure:** if Redis is unavailable, reads fall back to the owning PostgreSQL service. Set `Caching__ArticleEnabled=false` or `Caching__CommentEnabled=false` to bypass a cache without changing API behavior.
-- **Cache stampede:** concurrent misses are coalesced within each service process, and the shared Redis cache prevents independent per-instance caches.
-
-Useful local inspection commands:
-
-```bash
-docker compose exec redis redis-cli PING
-docker compose exec redis redis-cli CONFIG GET maxmemory-policy
-docker compose exec redis redis-cli --scan --pattern 'article:eu:*'
-docker compose exec redis redis-cli TTL 'article:eu:paste-article-id-here'
-docker compose exec redis redis-cli ZCARD 'comments:lru:eu:30'
-```
-
-In Grafana, open **Happy Headlines — Cache and Service Health**. It separates hit ratio and hit/miss rates by cache layer and region, and includes request volume, p95 latencies, errors, cache fallbacks, and cache-bypass metrics. Zipkin shows the publication trace across PublisherService, NewsletterService, and ArticleService.
-
-## Build, smoke test, and scale out
-
-The solution build verifies compilation. The smoke test requires the Compose stack to be running and checks queued publication, persistence, region isolation, cache hits, comment invalidation, and the comment-list LRU bound:
-
-```bash
-dotnet build HappyHeadlines.slnx
-./scripts/smoke-test.sh
-```
-
-To demonstrate X-axis scaling and run the included 10-VU, 30-second k6 test:
+Prerequisites are the .NET 10 SDK, Docker Engine, Docker Compose v2, Bash, curl and Python 3. From the repository root:
 
 ```bash
 ./scripts/build.sh
 docker compose up --build -d --wait --scale article-service=2
-docker compose --profile loadtest run --rm --no-deps k6
+docker compose ps
 ```
 
-That command exercises the article-list route. To also load one particular article and its comments, supply an existing article ID. Keep the ID in a shell variable so it is passed safely:
+The build script publishes all six services and the prefill worker to `artifacts/`; the Compose images use those outputs. Rebuild the artifacts after application changes. The two regional article volumes are new; data in an older single article database volume is not migrated automatically. To build and run the available tests:
 
 ```bash
-export ARTICLE_ID='actual-article-guid'
-docker compose --profile loadtest run --rm --no-deps -e ARTICLE_ID k6
+dotnet build HappyHeadlines.slnx
+dotnet test HappyHeadlines.slnx
+./scripts/smoke-test.sh
 ```
 
-`--no-deps` keeps the chosen replica count unchanged; the stack must already be running. The k6 thresholds are local teaching targets, not production capacity claims.
+The smoke test requires the running stack with at least two ArticleService replicas. A local scale-out demonstration uses `docker compose up --build -d --wait --scale article-service=2`. The optional load test uses `docker compose --profile loadtest run --rm --no-deps k6`. Local results do not establish production capacity.
 
-## Stop or reset
+## Local endpoints
 
-Stop the stack while keeping persisted database and monitoring volumes:
+| Endpoint | Purpose |
+|---|---|
+| <http://localhost:8080> | API gateway |
+| <http://localhost:8081> | Structurizr Lite |
+| <http://localhost:3000> | Grafana (`admin` / `happy-headlines`) |
+| <http://localhost:9090> | Prometheus |
+| <http://localhost:8083> | Seq logs |
+| <http://localhost:9411> | Zipkin traces |
+| <http://localhost:15672> | RabbitMQ management (`guest` / `guest`) |
 
-```bash
-docker compose down
-```
+`POST /publish` accepts a JSON article and returns its ID before asynchronous persistence. `GET /articles?region=eu` and `GET /articles/{id}` read articles; `X-Region: eu` or `X-Region: na` selects a region. Comment routes use `/articles/{id}/comments`. The gateway also exposes `/subscribers` and `/features/subscribers`.
 
-To reset the local databases, Redis, and monitoring state as well:
+The subscriber feature defaults to disabled. `GET /features/subscribers` reads its state; `PUT /features/subscribers` accepts `{"enabled":true}` or `{"enabled":false}`. The state is shared in Redis with AOF persistence; absent or unavailable state disables subscriber interactions. When disabled, subscriber endpoints return 503, new subscriber work is skipped, and queued work is paused. Operations already in flight can finish, and skipped events are not backfilled. Outbox publication retries may duplicate delivery; subscriber records are deduplicated.
 
-```bash
-docker compose down -v
-./scripts/build.sh
-docker compose up --build -d --wait
-```
+## Delivery
 
-## Course mapping and Week 40 presentation
+`.github/workflows/delivery.yml` defines build, test and smoke checks and publishes seven versioned container images on a successful `v*` tag. A separate manually triggered promotion workflow deploys a selected image tag to a configured host. Publication and deployment require separate verification and host credentials; no deployment is implied by the configuration.
 
-- Week 35: Docker/Compose and C4 context, container, and component views.
-- Week 36: headroom analysis plus X-axis replication and Z-axis regional partitioning.
-- Week 37: asynchronous design, service isolation, cache bypass, and scale-out.
-- Week 38: design-to-be-monitored, structured logs, metrics, and C4 monitoring components.
-- Week 39: RabbitMQ workflow, trace propagation, and service observability.
-- Week 40: Redis prefill/read-on-miss, TTL/LRU decisions, Prometheus metrics, and Grafana dashboard.
-- Week 41: organisational analysis informs service ownership; it is not an application feature.
+## Monitoring and shutdown
 
-The Week 40 notes specify a live Zoom presentation and no compulsory file hand-in; confirm your presentation slot in Moodle. Speaker notes and a demonstration plan are in [`docs/presentations/week40-cache-presentation.md`](docs/presentations/week40-cache-presentation.md).
+Grafana displays service and cache metrics; Seq stores structured logs; Zipkin displays traces across the publication path. The [hand-in guide](docs/assignment/hand-in.md) describes the screenshots required by the assignment.
+
+`docker compose down` stops the stack and retains volumes. `docker compose down -v` also removes local persisted data, including database and monitoring volumes.

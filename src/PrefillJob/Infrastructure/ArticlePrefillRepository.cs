@@ -3,12 +3,12 @@ using Npgsql;
 
 namespace HappyHeadlines.PrefillJob.Infrastructure;
 
-public sealed class ArticlePrefillRepository(NpgsqlDataSource dataSource) : IArticlePrefillRepository
+public sealed class ArticlePrefillRepository(ArticleShardRouter router) : IArticlePrefillRepository
 {
     public async Task<IReadOnlyList<ArticleRecord>> GetRecentAsync(
         string region, DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand(
+        await using var command = router.ForRegion(region).CreateCommand(
             "SELECT id, title, body, region, published_at FROM articles WHERE region = @region AND published_at >= @cutoff ORDER BY published_at DESC");
         command.Parameters.AddWithValue("region", Regions.Normalize(region));
         command.Parameters.AddWithValue("cutoff", cutoff);

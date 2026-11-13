@@ -16,10 +16,8 @@ builder.Services.AddSerilog((_, logger) => logger
     .WriteTo.Console(new JsonFormatter())
     .WriteTo.Seq(seqUrl));
 
-var postgresConnection = builder.Configuration.GetConnectionString("Postgres")
-    ?? "Host=localhost;Port=5432;Database=articles;Username=happy;Password=happy";
 var redisConnection = builder.Configuration["Redis:Connection"] ?? "localhost:6379,abortConnect=false";
-builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(postgresConnection));
+builder.Services.AddSingleton<ArticleShardRouter>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnection));
 builder.Services.AddSingleton<IArticlePrefillRepository, ArticlePrefillRepository>();
 builder.Services.AddSingleton<IArticleCacheWriter, ArticleCacheWriter>();

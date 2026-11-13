@@ -9,3 +9,5 @@ dotnet publish src/NewsletterService/NewsletterService.csproj -c Release -o arti
 dotnet publish src/ArticleService/ArticleService.csproj -c Release -o artifacts/ArticleService /p:UseAppHost=false
 dotnet publish src/CommentService/CommentService.csproj -c Release -o artifacts/CommentService /p:UseAppHost=false
 dotnet publish src/PrefillJob/PrefillJob.csproj -c Release -o artifacts/PrefillJob /p:UseAppHost=false
+dotnet publish src/ProfanityService/ProfanityService.csproj -c Release -o artifacts/ProfanityService /p:UseAppHost=false
+dotnet publish src/SubscriberService/SubscriberService.csproj -c Release -o artifacts/SubscriberService /p:UseAppHost=false

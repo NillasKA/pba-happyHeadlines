@@ -9,8 +9,8 @@ public sealed class ArticleService(
     StripedAsyncLock missLock,
     ILogger<ArticleService> logger) : IArticleService
 {
-    public Task<IReadOnlyList<ArticleRecord>> GetRecentAsync(string? region, CancellationToken cancellationToken) =>
-        repository.GetRecentAsync(Regions.Normalize(region), DateTimeOffset.UtcNow.AddDays(-14), cancellationToken);
+    public Task<IReadOnlyList<ArticleRecord>> GetRecentAsync(string? region, CancellationToken cancellationToken, int? limit = null, int offset = 0) =>
+        repository.GetRecentAsync(Regions.Normalize(region), DateTimeOffset.UtcNow.AddDays(-14), cancellationToken, limit, offset);
 
     public async Task<ArticleRecord?> GetAsync(Guid id, string? requestedRegion, CancellationToken cancellationToken)
     {
@@ -23,7 +23,7 @@ public sealed class ArticleService(
 
         using (await missLock.LockAsync($"article:{region}:{id}", cancellationToken))
         {
-            // Another request in this process may have populated Redis while we waited.
+            // Another request in this process may have populated Redis while the request waited.
             cached = await cache.GetAsync(id, region, cancellationToken, logger);
             if (cached.Value is not null)
                 return cached.Value;

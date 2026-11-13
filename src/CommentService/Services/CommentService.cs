@@ -7,6 +7,7 @@ public sealed class CommentService(
     CommentRepository repository,
     CommentCache cache,
     StripedAsyncLock missLock,
+    IProfanityClient profanityClient,
     ILogger<CommentService> logger) : ICommentService
 {
     public async Task<IReadOnlyList<CommentRecord>> GetForArticleAsync(
@@ -21,7 +22,7 @@ public sealed class CommentService(
 
         using (await missLock.LockAsync($"comments:{region}:{articleId}", cancellationToken))
         {
-            // Another request in this process may have populated Redis while we waited.
+            // Another request in this process may have populated Redis while the request waited.
             cached = await cache.GetAsync(articleId, region, cancellationToken, logger);
             if (cached.Value is not null)
                 return cached.Value;
@@ -41,6 +42,7 @@ public sealed class CommentService(
             throw new ArgumentException("comment body is required");
 
         var region = Regions.Normalize(requestedRegion);
+        await profanityClient.CheckAsync(request.Body, cancellationToken);
         var comment = new CommentRecord(Guid.NewGuid(), articleId, request.Body.Trim(), region, DateTimeOffset.UtcNow);
         await repository.InsertAsync(comment, cancellationToken);
         await cache.InvalidateAsync(articleId, region, cancellationToken, logger);

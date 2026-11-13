@@ -25,6 +25,8 @@ public sealed class CommentsController(ICommentService commentService) : Control
             var comment = await commentService.CreateAsync(articleId, request, region, cancellationToken);
             return Created($"/articles/{articleId}/comments", comment);
         }
+        catch (ModerationUnavailableException exception) { return StatusCode(503, new { error = exception.Message }); }
+        catch (CommentRejectedException exception) { return BadRequest(new { error = exception.Message }); }
         catch (ArgumentException exception)
         {
             return BadRequest(new { error = exception.Message });

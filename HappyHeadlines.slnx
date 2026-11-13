@@ -5,4 +5,7 @@
   <Project Path="src/ArticleService/ArticleService.csproj" />
   <Project Path="src/PrefillJob/PrefillJob.csproj" />
   <Project Path="src/CommentService/CommentService.csproj" />
+  <Project Path="src/ProfanityService/ProfanityService.csproj" />
+  <Project Path="src/SubscriberService/SubscriberService.csproj" />
+  <Project Path="tests/ServiceTests/ServiceTests.csproj" />
 </Solution>

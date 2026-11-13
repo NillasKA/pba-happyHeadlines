@@ -3,11 +3,11 @@ using Npgsql;
 
 namespace HappyHeadlines.ArticleService.Infrastructure;
 
-public sealed class ArticleRepository(NpgsqlDataSource dataSource)
+public sealed class ArticleRepository(ArticleShardRouter router)
 {
     public async Task<ArticleRecord?> GetAsync(Guid id, string region, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand(
+        await using var command = router.ForRegion(region).CreateCommand(
             "SELECT id, title, body, region, published_at FROM articles WHERE id = @id AND region = @region");
         command.Parameters.AddWithValue("id", id);
         command.Parameters.AddWithValue("region", Regions.Normalize(region));
@@ -16,12 +16,14 @@ public sealed class ArticleRepository(NpgsqlDataSource dataSource)
     }
 
     public async Task<IReadOnlyList<ArticleRecord>> GetRecentAsync(
-        string region, DateTimeOffset cutoff, CancellationToken cancellationToken)
+        string region, DateTimeOffset cutoff, CancellationToken cancellationToken, int? limit = null, int offset = 0)
     {
-        await using var command = dataSource.CreateCommand(
-            "SELECT id, title, body, region, published_at FROM articles WHERE region = @region AND published_at >= @cutoff ORDER BY published_at DESC");
+        await using var command = router.ForRegion(region).CreateCommand(
+            "SELECT id, title, body, region, published_at FROM articles WHERE region = @region AND published_at >= @cutoff ORDER BY published_at DESC, id LIMIT @limit OFFSET @offset");
         command.Parameters.AddWithValue("region", Regions.Normalize(region));
         command.Parameters.AddWithValue("cutoff", cutoff);
+        command.Parameters.AddWithValue("limit", limit ?? int.MaxValue);
+        command.Parameters.AddWithValue("offset", offset);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var articles = new List<ArticleRecord>();
         while (await reader.ReadAsync(cancellationToken))
@@ -31,7 +33,7 @@ public sealed class ArticleRepository(NpgsqlDataSource dataSource)
 
     public async Task UpsertAsync(ArticlePublished article, CancellationToken cancellationToken)
     {
-        await using var command = dataSource.CreateCommand("""
+        await using var command = router.ForRegion(article.Region).CreateCommand("""
             INSERT INTO articles (region, id, title, body, published_at)
             VALUES (@region, @id, @title, @body, @published_at)
             ON CONFLICT (region, id) DO UPDATE

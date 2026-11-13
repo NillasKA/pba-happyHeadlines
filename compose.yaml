@@ -1,5 +1,5 @@
 services:
-  article-db:
+  article-db-eu:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: happy
@@ -8,8 +8,25 @@ services:
     ports:
       - "55432:5432"
     volumes:
-      - article_db_data:/var/lib/postgresql/data
-      - ./infra/postgres/articles.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+      - article_db_eu_data:/var/lib/postgresql/data
+      - ./infra/postgres/articles-eu.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happy -d articles"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  article-db-na:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: happy
+      POSTGRES_PASSWORD: happy
+      POSTGRES_DB: articles
+    ports:
+      - "55434:5432"
+    volumes:
+      - article_db_na_data:/var/lib/postgresql/data
+      - ./infra/postgres/articles-na.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U happy -d articles"]
       interval: 5s
@@ -35,7 +52,9 @@ services:
 
   redis:
     image: redis:7.4-alpine
-    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "128mb", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - redis_data:/data
     ports:
       - "6379:6379"
     healthcheck:
@@ -71,12 +90,14 @@ services:
       - "9411:9411"
 
   article-service:
+    image: ${IMAGE_PREFIX:-happy-headlines}/article-service:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: src/ArticleService/Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Postgres: Host=article-db;Port=5432;Database=articles;Username=happy;Password=happy
+      ConnectionStrings__ArticlesEu: Host=article-db-eu;Port=5432;Database=articles;Username=happy;Password=happy
+      ConnectionStrings__ArticlesNa: Host=article-db-na;Port=5432;Database=articles;Username=happy;Password=happy
       Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
       Caching__ArticleEnabled: "true"
       RabbitMq__Host: rabbitmq
@@ -86,8 +107,10 @@ services:
       Prefill__IntervalMinutes: 360
       Prefill__ArticleTtlHours: 8
     depends_on:
-      article-db:
-        condition: service_healthy
+      article-db-eu:
+        condition: service_started
+      article-db-na:
+        condition: service_started
       redis:
         condition: service_healthy
       rabbitmq:
@@ -100,24 +123,29 @@ services:
       - "8080"
 
   article-prefill:
+    image: ${IMAGE_PREFIX:-happy-headlines}/prefill-job:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: src/PrefillJob/Dockerfile
     environment:
-      ConnectionStrings__Postgres: Host=article-db;Port=5432;Database=articles;Username=happy;Password=happy
+      ConnectionStrings__ArticlesEu: Host=article-db-eu;Port=5432;Database=articles;Username=happy;Password=happy
+      ConnectionStrings__ArticlesNa: Host=article-db-na;Port=5432;Database=articles;Username=happy;Password=happy
       Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
       Seq__ServerUrl: http://seq:5341
       Prefill__IntervalMinutes: 360
       Prefill__ArticleTtlHours: 8
     depends_on:
-      article-db:
-        condition: service_healthy
+      article-db-eu:
+        condition: service_started
+      article-db-na:
+        condition: service_started
       redis:
         condition: service_healthy
       seq:
         condition: service_started
 
   comment-service:
+    image: ${IMAGE_PREFIX:-happy-headlines}/comment-service:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: src/CommentService/Dockerfile
@@ -126,6 +154,7 @@ services:
       ConnectionStrings__Postgres: Host=comment-db;Port=5432;Database=comments;Username=happy;Password=happy
       Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
       Caching__CommentEnabled: "true"
+      Profanity__BaseUrl: http://profanity-service:8080
       Seq__ServerUrl: http://seq:5341
       Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
     depends_on:
@@ -141,14 +170,19 @@ services:
       - "8080"
 
   newsletter-service:
+    image: ${IMAGE_PREFIX:-happy-headlines}/newsletter-service:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: src/NewsletterService/Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:8080
       RabbitMq__Host: rabbitmq
+      ConnectionStrings__Postgres: Host=newsletter-db;Port=5432;Database=newsletter;Username=happy;Password=happy
+      Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
       RabbitMq__InputQueue: article.published
       RabbitMq__OutputQueue: article.to-store
+      RabbitMq__SubscriberQueue: subscriber.notifications
+      Subscribers__Enabled: "false"
       Seq__ServerUrl: http://seq:5341
       Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
     depends_on:
@@ -164,6 +198,7 @@ services:
       - "8080"
 
   publisher-service:
+    image: ${IMAGE_PREFIX:-happy-headlines}/publisher-service:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: src/PublisherService/Dockerfile
@@ -182,8 +217,67 @@ services:
     expose:
       - "8080"
 
+  newsletter-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: happy
+      POSTGRES_PASSWORD: happy
+      POSTGRES_DB: newsletter
+    volumes:
+      - newsletter_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happy -d newsletter"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  subscriber-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: happy
+      POSTGRES_PASSWORD: happy
+      POSTGRES_DB: subscribers
+    volumes:
+      - subscriber_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U happy -d subscribers"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  profanity-service:
+    image: ${IMAGE_PREFIX:-happy-headlines}/profanity-service:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/ProfanityService/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Seq__ServerUrl: http://seq:5341
+      Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
+    expose: ["8080"]
+
+  subscriber-service:
+    image: ${IMAGE_PREFIX:-happy-headlines}/subscriber-service:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/SubscriberService/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=subscriber-db;Port=5432;Database=subscribers;Username=happy;Password=happy
+      Redis__Connection: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000
+      RabbitMq__Host: rabbitmq
+      RabbitMq__SubscriberQueue: subscriber.notifications
+      Seq__ServerUrl: http://seq:5341
+      Zipkin__Endpoint: http://zipkin:9411/api/v2/spans
+    depends_on:
+      subscriber-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    expose: ["8080"]
+
   gateway:
-    image: nginx:1.27-alpine
+    image: nginx:1.27.5-alpine
     ports:
       - "8080:8080"
     volumes:
@@ -241,8 +335,12 @@ services:
       - gateway
 
 volumes:
-  article_db_data:
+  article_db_eu_data:
+  article_db_na_data:
   comment_db_data:
+  subscriber_db_data:
+  newsletter_db_data:
+  redis_data:
   seq_data:
   prometheus_data:
   grafana_data:

@@ -32,6 +32,9 @@ public static class HappyMetrics
         new[] { "layer", "operation" },
         new HistogramConfiguration { Buckets = Histogram.ExponentialBuckets(0.0005, 2, 14) });
 
+    public static readonly Counter ModerationChecks = Metrics.CreateCounter("happy_headlines_moderation_checks_total", "Moderation checks by result.", new[] { "result" });
+    public static readonly Counter SubscriberEvents = Metrics.CreateCounter("happy_headlines_subscriber_events_total", "Subscriber notification events by outcome.", new[] { "outcome" });
+
     public static readonly Counter PublishedEvents = Metrics.CreateCounter(
         "happy_headlines_published_events_total", "Article publication events sent to RabbitMQ.");
 
