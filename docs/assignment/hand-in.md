@@ -42,7 +42,7 @@ The planned verification artifact contains the following files when capture succ
 
 | File | Intended description |
 |---|---|
-| `metrics-grafana.png` | Grafana dashboard displaying Happy Headlines service or cache metrics from Prometheus. The displayed series, service and time interval identify the measured activity. |
+| `metrics-prometheus.png` | Prometheus query showing Happy Headlines HTTP request counts by service. The visible service labels and values identify the measured activity. |
 | `logging-seq.png` | Seq structured events from article publication or persistence, identifying the emitting service and the operation recorded. |
 | `tracing-zipkin.png` | Zipkin distributed trace showing spans from multiple services in an article publication path. The visible span names and services identify the components involved. |
 

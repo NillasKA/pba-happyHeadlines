@@ -31,22 +31,14 @@ async function waitFor(check, label) {
 const page = await browser.newPage({ viewport: { width: 1600, height: 1050 }, deviceScaleFactor: 1 });
 
 await attempt('metrics', async () => {
-  await waitFor(async () => (await json('http://localhost:9090/api/v1/query?query=' + encodeURIComponent('sum(rate(happy_headlines_http_requests_total[5m]))'))).data.result.length > 0, 'Prometheus request rate');
+  const query = 'sum by (service) (happy_headlines_http_requests_total)';
+  await waitFor(async () => (await json('http://localhost:9090/api/v1/query?query=' + encodeURIComponent(query))).data.result.some(series => /ArticleService/i.test(series.metric.service ?? '')), 'ArticleService request series');
   try {
-    const login = await page.request.post('http://localhost:3000/login', {
-      data: { user: 'admin', password: 'happy-headlines' }
-    });
-    if (!login.ok()) throw new Error(`Grafana login failed: HTTP ${login.status()}`);
-    await waitFor(async () => {
-      const response = await page.request.get('http://localhost:3000/api/dashboards/uid/happy-headlines-cache');
-      return response.ok();
-    }, 'provisioned Grafana dashboard');
-    await page.goto('http://localhost:3000/d/happy-headlines-cache/happy-headlines-cache-and-service-health?from=now-30m&to=now', { waitUntil: 'domcontentloaded' });
-    await page.getByText('Cache hit ratio by layer and region').first().waitFor({ timeout: 45000 });
-    await delay(10000);
-    await page.screenshot({ path: join(output, 'metrics-grafana.png'), fullPage: true });
+    await page.goto('http://localhost:9090/graph?g0.expr=' + encodeURIComponent(query) + '&g0.tab=1', { waitUntil: 'domcontentloaded' });
+    await page.getByText(/ArticleService/i).first().waitFor({ timeout: 45000 });
+    await page.screenshot({ path: join(output, 'metrics-prometheus.png'), fullPage: false });
   } catch (error) {
-    await page.screenshot({ path: join(output, 'metrics-debug.png'), fullPage: true }).catch(() => {});
+    await page.screenshot({ path: join(output, 'metrics-debug.png'), fullPage: false }).catch(() => {});
     const body = await page.locator('body').innerText({ timeout: 3000 }).catch(() => 'Body unavailable');
     await writeFile(join(output, 'metrics-debug.txt'), `URL: ${page.url()}\n${body}\n`);
     throw error;
