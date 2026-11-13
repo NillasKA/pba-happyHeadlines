@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: happy
       POSTGRES_PASSWORD: happy
       POSTGRES_DB: articles
-    ports:
-      - "55432:5432"
     volumes:
       - article_db_eu_data:/var/lib/postgresql/data
       - ./infra/postgres/articles-eu.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
@@ -22,8 +20,6 @@ services:
       POSTGRES_USER: happy
       POSTGRES_PASSWORD: happy
       POSTGRES_DB: articles
-    ports:
-      - "55434:5432"
     volumes:
       - article_db_na_data:/var/lib/postgresql/data
       - ./infra/postgres/articles-na.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
@@ -39,8 +35,6 @@ services:
       POSTGRES_USER: happy
       POSTGRES_PASSWORD: happy
       POSTGRES_DB: comments
-    ports:
-      - "55433:5432"
     volumes:
       - comment_db_data:/var/lib/postgresql/data
       - ./infra/postgres/comments.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
