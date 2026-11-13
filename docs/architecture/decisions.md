@@ -1,38 +1,17 @@
 # Architecture decisions
 
-## Service boundaries
+## Boundaries and communication
 
-- **PublisherService** accepts article publication requests and emits an `ArticlePublished` event.
-- **RabbitMQ / ArticleQueue** decouples publication from processing.
-- **NewsletterService** consumes the event and republishes an article-storage command to a second durable queue.
-- **ArticleService** owns article persistence and article caching.
-- **Article Prefill Job** is a single scheduled worker that preloads recent articles, avoiding one prefill loop per X-axis ArticleService replica.
-- **CommentService** owns comment persistence and comment caching.
-- ArticleService and CommentService use separate PostgreSQL containers to avoid sharing a persistence failure domain.
+PublisherService, NewsletterService, ArticleService, CommentService, ProfanityService and SubscriberService have distinct responsibilities. RabbitMQ decouples article publication, persistence, and subscriber notification processing. SubscriberService has its own database and notification queue. A shared Redis-backed runtime flag controls subscriber endpoints and work. Disabled or unavailable state skips new work and pauses the queue; in-flight operations can finish. NewsletterService persists enabled subscriber work in its own database outbox and retries publication. Subscriber records are idempotent and skipped events are not backfilled. Notification processing records work rather than sending email. If the outbox database is unavailable while the feature is enabled, the current article is published to storage but its input event is retried; with a prefetch of one, later article events wait for the outbox database. When Redis is unavailable, the feature is treated as disabled and new subscriber work is skipped without backfill.
 
-The publication and persistence path is asynchronous across both service boundaries. Trace context is propagated through RabbitMQ message headers. Synchronous HTTP is used at the API gateway edge for user request/response paths.
+CommentService calls ProfanityService synchronously through a circuit breaker. After three failures the circuit opens for 15 seconds; one probe tests recovery after that interval. Each moderation call has a two-second timeout. Unavailable moderation fails closed rather than allowing an unchecked comment. These boundaries limit propagation but do not constitute fully independent physical deployments in the local Compose stack.
 
-## Scale Cube demonstration
+## Scale and caching
 
-- **X-axis:** stateless service instances can be scaled horizontally behind the gateway. Database reads are the first candidate for replication; writes remain authoritative.
-- **Y-axis:** article publication, newsletter processing, article reads, and comment reads are distinct responsibilities.
-- **Z-axis:** requests are routed by a validated `eu` or `na` region key. PostgreSQL tables and Redis keys are partitioned by region. The local deployment demonstrates logical partitioning; independent production regions would need additional deployment, replication, and failure-recovery design.
+ArticleService replicas sit behind the NGINX gateway. A shared regional router selects separate EU and NA Article PostgreSQL connections for reads, writes, and prefill. The two databases demonstrate separate local failure and data partitions; the Compose stack is not a geographically distributed production deployment. Comment data remains in a separate PostgreSQL database. Redis uses region-qualified keys.
 
-The Z-axis choice is region because it connects the Week 36 partitioning exercise to Week 40's geo-latency scenario. Routing must be centralized; clients do not select database hosts directly.
-
-## Caching decisions
-
-- Articles: scheduled prefill of the last 14 days every 6 hours; 8-hour TTL.
-- Comments: cache-aside on a miss; 15-minute initial TTL; invalidate on comment writes.
-- Comment recency: maintain a bounded per-region set of the 30 most recently used article IDs; Redis memory policy is an additional safeguard, not the exact-count mechanism.
-- Redis failure: fall back to PostgreSQL and count the fallback. Cache errors must not make article/comment reads unavailable.
-- Cache keys include data type and region to avoid collisions.
+The prefill worker loads recent articles every six hours with an eight-hour cache TTL. It handles failures per region; after any failure the worker retries after 60 seconds by default (configurable from 1 to 300 seconds), then returns to the six-hour interval after a successful pass. Successful regions are also refreshed during retry passes. Compose waits for database containers to start, not for both databases to become healthy. Individual article reads and comment reads use cache-aside; comment writes invalidate the relevant list. The Redis recent-article index bounds comment lists per region. Cache failures fall back to PostgreSQL. These policies represent local design choices rather than capacity or energy measurements.
 
 ## Observability
 
-- Prometheus answers trend/threshold questions from service and cache metrics.
-- Grafana visualizes hits, misses, hit ratio, latency, request volume, fallbacks, and errors.
-- Seq stores structured logs with service, request, and trace identifiers.
-- Zipkin displays distributed traces across PublisherService, RabbitMQ, NewsletterService, and ArticleService.
-
-This uses the course monitoring sequence: **Is there an incident? → Where is the problem? → What is the problem?**
+Prometheus scrapes metrics and Grafana displays them. Seq stores structured logs and Zipkin displays distributed traces across the article publication path. Actual evidence requires observed telemetry from a running stack.

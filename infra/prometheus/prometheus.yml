@@ -30,3 +30,17 @@ scrape_configs:
         type: A
         port: 8080
         refresh_interval: 10s
+  - job_name: profanity-service
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [profanity-service]
+        type: A
+        port: 8080
+        refresh_interval: 10s
+  - job_name: subscriber-service
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [subscriber-service]
+        type: A
+        port: 8080
+        refresh_interval: 10s

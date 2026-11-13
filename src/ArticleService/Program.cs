@@ -8,12 +8,11 @@ using StackExchange.Redis;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddObservability("ArticleService");
 builder.Services.AddControllers();
+builder.Services.AddResponseCompression();
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
 
-var postgresConnection = builder.Configuration.GetConnectionString("Postgres")
-    ?? "Host=localhost;Port=5432;Database=articles;Username=happy;Password=happy";
 var redisConnection = builder.Configuration["Redis:Connection"] ?? "localhost:6379,abortConnect=false";
-builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(postgresConnection));
+builder.Services.AddSingleton<ArticleShardRouter>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnection));
 builder.Services.AddSingleton<ArticleRepository>();
 builder.Services.AddSingleton<ArticleCache>();
@@ -22,6 +21,12 @@ builder.Services.AddScoped<IArticleService, ArticleService>();
 builder.Services.AddHostedService<ArticlePersistenceConsumer>();
 
 var app = builder.Build();
+app.UseResponseCompression();
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Article-Instance"] = Environment.MachineName;
+    await next();
+});
 app.UseHappyHeadlinesMetrics("ArticleService");
 app.MapControllers();
 app.Run();

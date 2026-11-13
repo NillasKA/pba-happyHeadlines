@@ -1,0 +1,9 @@
+{
+  "revision": "7a0fc14b0bfaafaffa815c7f9a3125bae595c744",
+  "capturedAtUtc": "2026-11-13T12:11:27.085Z",
+  "platform": "linux",
+  "architecture": "x64",
+  "kernelRelease": "7.0.0-1019-azure",
+  "nodeVersion": "v22.23.4",
+  "baselineRevision": "3854063ce56689b4b7355a53323a16e3bd7b5d00"
+}

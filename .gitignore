@@ -10,3 +10,6 @@ docs/architecture/.structurizr/
 TestResults/
 coverage/
 .env
+
+node_modules/
+evidence/

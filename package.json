@@ -1,0 +1,7 @@
+{
+  "name": "happy-headlines-evidence",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": { "playwright": "1.62.1" }
+}

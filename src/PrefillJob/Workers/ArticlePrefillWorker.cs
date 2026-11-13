@@ -11,11 +11,15 @@ public sealed class ArticlePrefillWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var interval = TimeSpan.FromMinutes(configuration.GetValue("Prefill:IntervalMinutes", 360));
+        var retry = TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue("Prefill:RetrySeconds", 60), 1, 300));
         while (!stoppingToken.IsCancellationRequested)
         {
+            var nextDelay = retry;
             try
             {
-                await prefillService.PrefillRecentArticlesAsync(stoppingToken);
+                var result = await prefillService.PrefillRecentArticlesAsync(stoppingToken);
+                if (result.FailedRegions == 0) nextDelay = interval;
+                else logger.LogWarning("Prefill failed for {Count} regions; retrying in {Delay}", result.FailedRegions, retry);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -24,10 +28,10 @@ public sealed class ArticlePrefillWorker(
             catch (Exception exception)
             {
                 using (logger.Here())
-                    logger.LogError(exception, "Article cache prefill failed; the job will retry next interval");
+                    logger.LogError(exception, "Article cache prefill failed; the job will retry shortly");
             }
 
-            try { await Task.Delay(interval, stoppingToken); }
+            try { await Task.Delay(nextDelay, stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }
     }

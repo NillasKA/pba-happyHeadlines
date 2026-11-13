@@ -7,5 +7,6 @@ public sealed class NewsletterRabbitOptions
     public string UserName { get; set; } = "guest";
     public string Password { get; set; } = "guest";
     public string InputQueue { get; set; } = "article.published";
+    public string SubscriberQueue { get; set; } = "subscriber.notifications";
     public string OutputQueue { get; set; } = "article.to-store";
 }

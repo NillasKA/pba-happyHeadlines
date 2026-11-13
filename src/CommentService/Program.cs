@@ -16,6 +16,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer
 builder.Services.AddSingleton<CommentRepository>();
 builder.Services.AddSingleton<CommentCache>();
 builder.Services.AddSingleton<StripedAsyncLock>();
+builder.Services.AddProfanityModeration(new Uri(builder.Configuration["Profanity:BaseUrl"] ?? "http://localhost:8080"));
 builder.Services.AddScoped<ICommentService, CommentService>();
 
 var app = builder.Build();
