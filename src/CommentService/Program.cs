@@ -16,9 +16,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer
 builder.Services.AddSingleton<CommentRepository>();
 builder.Services.AddSingleton<CommentCache>();
 builder.Services.AddSingleton<StripedAsyncLock>();
-builder.Services.AddHttpClient<ProfanityClient>(client => client.BaseAddress = new Uri(builder.Configuration["Profanity:BaseUrl"] ?? "http://localhost:8080"))
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2) });
-builder.Services.AddSingleton<IProfanityClient>(services => services.GetRequiredService<ProfanityClient>());
+builder.Services.AddProfanityModeration(new Uri(builder.Configuration["Profanity:BaseUrl"] ?? "http://localhost:8080"));
 builder.Services.AddScoped<ICommentService, CommentService>();
 
 var app = builder.Build();

@@ -6,12 +6,28 @@ using HappyHeadlines.NewsletterService.Services;
 using HappyHeadlines.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ServiceTests;
 
 public sealed class ResilienceTests
 {
+    [Fact]
+    public void Moderation_registration_resolves_one_shared_breaker()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddProfanityModeration(new Uri("http://moderation.test"));
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var firstScope = provider.CreateScope();
+        using var secondScope = provider.CreateScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<IProfanityClient>();
+        var second = secondScope.ServiceProvider.GetRequiredService<IProfanityClient>();
+        Assert.IsType<ProfanityClient>(first);
+        Assert.Same(first, second);
+    }
+
     [Fact]
     public async Task Breaker_opens_and_recovers_after_one_probe()
     {
